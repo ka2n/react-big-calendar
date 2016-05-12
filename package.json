@@ -32,7 +32,10 @@
     "lint": "eslint src test",
     "test": "npm run lint && karma start --single-run",
     "tdd": "karma start",
-    "release": "release"
+    "release": "release",
+    "release:private:clean": "rimraf release && mkdir release",
+    "release:private:copy": "cpy 'package.json' 'lib/**/*.*' release --parents",
+    "release:private": "npm run build && npm run release:private:clean && npm run release:private:copy"
   },
   "peerDependencies": {
     "react": "^0.14.0 || ^15.0.0",
