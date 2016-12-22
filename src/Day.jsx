@@ -7,6 +7,10 @@ let Day = React.createClass({
 
   propTypes: TimeGrid.propTypes,
 
+  getDefaultProps() {
+    return TimeGrid.defaultProps
+  },
+
   render() {
     let { date } = this.props;
     let { start, end } = Day.range(date)
@@ -20,10 +24,10 @@ let Day = React.createClass({
 Day.navigate = (date, action)=>{
   switch (action){
     case navigate.PREVIOUS:
-      return dates.add(date, -1, 'day');
+      return dates.skipWeekends(dates.add(date, -1, 'day'), -1);
 
     case navigate.NEXT:
-      return dates.add(date, 1, 'day')
+      return dates.skipWeekends(dates.add(date, 1, 'day'), 1);
 
     default:
       return date;

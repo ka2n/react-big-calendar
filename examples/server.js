@@ -4,14 +4,14 @@ const config = require('../webpack/examples.config.es6');
 
 new WebpackDevServer(webpack(config), {
   publicPath: config.output.publicPath,
-  hot: true,
+  hot: false,
   historyApiFallback: true,
   quiet: false,
   progress: true,
   stats: {
     colors: true
   }
-}).listen(config.port, 'localhost', function (err) {
+}).listen(config.port, '0.0.0.0', function (err) {
   if (err) {
     console.log(err);
   } else {

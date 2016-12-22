@@ -2,9 +2,11 @@ import React from 'react';
 import { findDOMNode } from 'react-dom';
 import cn from 'classnames';
 import dates from './utils/dates';
+import { accessor as get } from './utils/accessors';
 import localizer from './localizer'
 import chunk from 'lodash/array/chunk';
 import omit from 'lodash/object/omit';
+import findIndex from 'lodash/array/findIndex';
 
 import { navigate } from './utils/constants';
 import { notify } from './utils/helpers';
@@ -12,6 +14,7 @@ import getHeight from 'dom-helpers/query/height';
 import getPosition from 'dom-helpers/query/position';
 import raf from 'dom-helpers/util/requestAnimationFrame';
 
+import EventCell from './EventCell';
 import EventRow from './EventRow';
 import EventEndingRow from './EventEndingRow';
 import Popup from './Popup';
@@ -21,10 +24,19 @@ import BackgroundCells from './BackgroundCells';
 import { dateFormat } from './utils/propTypes';
 import {
     segStyle, inRange, eventSegments
-  , endOfRange, eventLevels, sortEvents } from './utils/eventLevels';
+  , endOfRange, eventLevels, sortEventsByStart } from './utils/eventLevels';
 
 let eventsForWeek = (evts, start, end, props) =>
   evts.filter(e => inRange(e, start, end, props));
+
+let segmentWeeks = (weeks, events, props) => {
+  events.sort((a, b) => sortEventsByStart(a, b, props))
+  const weekEvents = weeks.map((weekDays) => {
+    const evts = eventsForWeek(events, weekDays[0], weekDays[weekDays.length - 1], props)
+    return evts
+  })
+  return weekEvents
+}
 
 let isSegmentInSlot = (seg, slot) => seg.left <= slot && seg.right >= slot;
 
@@ -56,17 +68,22 @@ let propTypes = {
   onSelectSlot: React.PropTypes.func
 };
 
-
 let MonthView = React.createClass({
 
   displayName: 'MonthView',
 
   propTypes,
 
+  getDefaultProps() {
+    return {
+      slots: 7
+    }
+  },
+
   getInitialState(){
     return {
-      rowLimit: 5,
-      needLimitMeasure: true
+      // rowLimit: 5,
+      // needLimitMeasure: true
     }
   },
 
@@ -76,105 +93,127 @@ let MonthView = React.createClass({
   },
 
   componentWillReceiveProps({ date }) {
-    this.setState({
-      needLimitMeasure: !dates.eq(date, this.props.date)
-    })
+    // this.setState({
+    //   needLimitMeasure: !dates.eq(date, this.props.date)
+    // })
   },
 
   componentDidMount() {
     let running;
 
-    if (this.state.needLimitMeasure)
-      this._measureRowLimit(this.props)
-
-    window.addEventListener('resize', this._resizeListener = ()=> {
-      if (!running) {
-        raf(()=> {
-          running = false
-          this.setState({ needLimitMeasure: true }) //eslint-disable-line
-        })
-      }
-    }, false)
+    // if (this.state.needLimitMeasure)
+    //   this._measureRowLimit(this.props)
+    //
+    // window.addEventListener('resize', this._resizeListener = ()=> {
+    //   if (!running) {
+    //     raf(()=> {
+    //       running = false
+    //       this.setState({ needLimitMeasure: true }) //eslint-disable-line
+    //     })
+    //   }
+    // }, false)
   },
 
-  componentDidUpdate(prevProps, prevState) {
-    if (this.state.needLimitMeasure)
-      this._measureRowLimit(this.props)
+  componentDidUpdate() {
+    // if (this.state.needLimitMeasure)
+    //   this._measureRowLimit(this.props)
   },
 
   componentWillUnmount() {
     window.removeEventListener('resize', this._resizeListener, false)
   },
 
-  render() {
-    var { date, culture, weekdayFormat } = this.props
-      , month = dates.visibleDays(date, culture)
-      , weeks  = chunk(month, 7);
+  _scroll(){
+    this.props.onScroll && this.props.onScroll.call(null, 'month')
+  },
 
-    let measure = this.state.needLimitMeasure
+  render() {
+    let { date, culture, weekdayFormat, className } = this.props
+      , month = dates.visibleDays(date, culture)
+      , weeks  = chunk(month, this.props.slots);
+
+    // let measure = this.state.needLimitMeasure
+    let measure = false
 
     this._weekCount = weeks.length;
 
-    var elementProps = omit(this.props, Object.keys(propTypes));
+    const weekEvents = segmentWeeks(weeks, this.props.events, this.props)
 
     return (
-      <div
-        {...elementProps}
-        className={cn('rbc-month-view', elementProps.className)}
-      >
-        <div className='rbc-row rbc-month-header'>
-          {this._headers(weeks[0], weekdayFormat, culture)}
+      <div className={cn('rbc-month-view', className)} onScroll={this._scroll}>
+        <div className='rbc-month-header-wrapper'>
+          <div className='rbc-row rbc-month-header'>
+            <div className='rbc-month-header-inner'>
+              {this._headers(weeks[0], weekdayFormat, culture)}
+            </div>
+          </div>
         </div>
-        { weeks.map((week, idx) =>
-            this.renderWeek(week, idx, measure && this._renderMeasureRows))
-        }
+        <div className='rbc-month-wrapper'>
+          <div className='rbc-month-container'>
+            <div className='rbc-month-inner'>
+              { weeks.map((week, idx) =>
+                  this.renderWeek(week, idx, weeks.length, weekEvents[idx], measure && this._renderMeasureRows))
+              }
+            </div>
+          </div>
+        </div>
       </div>
     )
   },
 
-  renderWeek(week, weekIdx, content) {
-    let { first, last } = endOfRange(week);
-    let evts = eventsForWeek(this.props.events, week[0], week[week.length - 1], this.props)
+  renderWeek(week, weekIdx, numWeeks, evts, content) {
+    let dailyEvents = evts.reduce((days, event) => {
+      let start = dates.startOf(get(event, this.props.startAccessor), 'day')
+      let dayIdx = week.findIndex((day) => { return day.valueOf() == start.valueOf() })
+      days[dayIdx].push(event)
+      return days
+    }, week.map((_) => []))
 
-    evts.sort((a, b) => sortEvents(a, b, this.props))
-
-    let segments = evts = evts.map(evt => eventSegments(evt, first, last, this.props))
-    let limit = (this.state.rowLimit - 1) || 1;
-
-    let { levels, extra } = eventLevels(segments, limit)
-
-    content = content || ((lvls, wk) => lvls.map((lvl, idx) => this.renderRowLevel(lvl, wk, idx)))
+    let rowStyle = {
+    }
 
     return (
       <div key={'week_' + weekIdx}
         className='rbc-month-row'
+        style={rowStyle}
         ref={!weekIdx && (r => this._firstRow = r)}
       >
         {
           this.renderBackground(week, weekIdx)
         }
-        <div
-          className='rbc-row-content'
-        >
-          <div
+        <div className='rbc-row-content'>
+        <table>
+          <tbody>
+          <tr
             className='rbc-row'
             ref={!weekIdx && (r => this._firstDateRow = r)}
           >
             { this._dates(week) }
-          </div>
-          {
-            content(levels, week, weekIdx)
-          }
-          {
-            !!extra.length &&
-              this.renderShowMore(segments, extra, week, weekIdx, levels.length)
-          }
+          </tr>
+          <tr className="rbc-row">
+            <td colSpan={this.props.slots}>
+              { dailyEvents.map((events) => this.renderDayEvents(events)) }
+            </td>
+          </tr>
+         </tbody></table>
         </div>
         { this.props.popup
             && this._renderOverlay()
         }
       </div>
     )
+  },
+
+  renderDayEvents(events) {
+    let cells = events.map((event) => (
+        <EventCell
+            {...this.props}
+            event={event}
+            component={this.props.components.event}
+            onSelect={this._selectEvent}
+        />
+    ))
+    return (<div className="rbc-day-col">{ cells.length > 0 ? cells : ('\u00A0') }</div>)
   },
 
   renderBackground(row, idx){
@@ -188,11 +227,15 @@ let MonthView = React.createClass({
       self._selectTimer = setTimeout(()=> self._selectDates())
     }
 
+    let today = new Date()
+    let todayIndex = findIndex(row, day => dates.eq(day, today, 'day'))
+
     return (
     <BackgroundCells
       container={() => findDOMNode(this)}
       selectable={this.props.selectable}
-      slots={7}
+      todayIndex={todayIndex}
+      slots={this.props.slots}
       ref={r => this._bgRows[idx] = r}
       onSelectSlot={onSelectSlot}
     />
@@ -235,13 +278,15 @@ let MonthView = React.createClass({
   },
 
   _dates(row){
+    let numRow = row.length
     return row.map((day, colIdx) => {
       var offRange = dates.month(day) !== dates.month(this.props.date);
+      let style = { width: `${100 / numRow}%` }
 
       return (
-        <div
+        <td
           key={'header_' + colIdx}
-          style={segStyle(1, 7)}
+          style={style}
           className={cn('rbc-date-cell', {
             'rbc-off-range': offRange,
             'rbc-now': dates.eq(day, new Date(), 'day'),
@@ -251,7 +296,7 @@ let MonthView = React.createClass({
           <a href='#' onClick={this._dateClick.bind(null, day)}>
             { localizer.format(day, this.props.dateFormat, this.props.culture) }
           </a>
-        </div>
+        </td>
       )
     })
   },
@@ -264,7 +309,6 @@ let MonthView = React.createClass({
       <div
         key={'header_' + idx}
         className='rbc-header'
-        style={segStyle(1, 7)}
       >
         { localizer.format(day, format, culture) }
       </div>
@@ -276,7 +320,7 @@ let MonthView = React.createClass({
 
     return first ? (
       <div className='rbc-row'>
-        <div className='rbc-row-segment' style={segStyle(1, 7)}>
+        <div className='rbc-row-segment' style={segStyle(1, this.props.slots)}>
           <div ref={r => this._measureEvent = r} className={cn('rbc-event')}>
             <div className='rbc-event-content'>&nbsp;</div>
           </div>
@@ -287,6 +331,7 @@ let MonthView = React.createClass({
 
   _renderOverlay(){
     let overlay = (this.state && this.state.overlay) || {};
+    let { components } = this.props;
 
     return (
       <Overlay
@@ -298,6 +343,7 @@ let MonthView = React.createClass({
       >
         <Popup
           {...this.props}
+          eventComponent={components.event}
           position={overlay.position}
           events={overlay.events}
           slotStart={overlay.date}
@@ -308,7 +354,7 @@ let MonthView = React.createClass({
     )
   },
 
-  _measureRowLimit(props) {
+  _measureRowLimit() {
     let eventHeight = getHeight(this._measureEvent);
     let labelHeight = getHeight(this._firstDateRow);
     let eventSpace = getHeight(this._firstRow) - labelHeight;

@@ -19,6 +19,8 @@ import Toolbar from './Toolbar';
 
 import omit from 'lodash/object/omit';
 import defaults from 'lodash/object/defaults';
+import transform from 'lodash/object/transform';
+import mapValues from 'lodash/object/mapValues';
 
 function viewNames(_views){
   return !Array.isArray(_views) ? Object.keys(_views) : _views
@@ -51,6 +53,12 @@ let now = new Date();
 let Calendar = React.createClass({
 
   propTypes: {
+
+    /**
+     * Props passed to main calendar <div>.
+     */
+    elementProps: PropTypes.object,
+
     /**
      * The current date value of the calendar. Determines the visible view range
      *
@@ -120,6 +128,8 @@ let Calendar = React.createClass({
      */
     onSelecting: PropTypes.func,
 
+    onScroll: PropTypes.func,
+
     /**
      * An array of built-in view names to allow the calendar to display.
      *
@@ -154,6 +164,11 @@ let Calendar = React.createClass({
      * Allows mouse selection of ranges of dates/times.
      */
     selectable: PropTypes.bool,
+
+    /**
+     * Determines the selectable time increments in week and day views
+     */
+    step: React.PropTypes.number,
 
     /**
      * switch the calendar to a `right-to-left` read direction.
@@ -211,9 +226,14 @@ let Calendar = React.createClass({
     min: PropTypes.instanceOf(Date),
 
     /**
-     * Constrains the maximum _time_ of the Day and Week views..
+     * Constrains the maximum _time_ of the Day and Week views.
      */
     max: PropTypes.instanceOf(Date),
+
+    /**
+     * Determines how far down the scroll pane is initially scrolled down.
+     */
+    scrollToTime: PropTypes.instanceOf(Date),
 
     /**
      * Localizer specific formats, tell the Calendar how to format and display dates.
@@ -270,6 +290,7 @@ let Calendar = React.createClass({
      * ```jsx
      * let components = {
      *   event: MyEvent, // used by each view (Month, Day, Week)
+     *   toolbar: MyToolbar,
      *   agenda: {
      *   	 event: MyAgendaEvent // with the agenda view use a different component to render events
      *   }
@@ -279,6 +300,8 @@ let Calendar = React.createClass({
      */
     components: PropTypes.shape({
       event: elementType,
+
+      toolbar: elementType,
 
       agenda: PropTypes.shape({
         date: elementType,
@@ -309,17 +332,46 @@ let Calendar = React.createClass({
 
   getDefaultProps() {
     return {
+      elementProps: {},
       popup: false,
       toolbar: true,
+      slots: 5,
       view: views.MONTH,
       views: [views.MONTH, views.WEEK, views.DAY, views.AGENDA],
       date: now,
+      step: 30,
 
       titleAccessor: 'title',
       allDayAccessor: 'allDay',
       startAccessor: 'start',
       endAccessor: 'end'
     };
+  },
+
+  getViews() {
+    const views = this.props.views;
+
+    if (Array.isArray(views)) {
+      return transform(views, (obj, name) => obj[name] = VIEWS[name], {});
+    }
+
+    if (typeof views === 'object') {
+      return mapValues(views, (value, key) => {
+        if (value === true) {
+          return VIEWS[key];
+        }
+
+        return value;
+      });
+    }
+
+    return VIEWS;
+  },
+
+  getView() {
+    const views = this.getViews();
+
+    return views[this.props.view];
   },
 
   render() {
@@ -330,54 +382,64 @@ let Calendar = React.createClass({
       , formats = {}
       , style
       , className
+      , elementProps
       , date: current
       , ...props } = this.props;
 
     formats = defaultFormats(formats)
 
-    let View = VIEWS[view];
+    let View = this.getView();
     let names = viewNames(this.props.views)
-
-    let elementProps = omit(this.props, Object.keys(Calendar.propTypes))
 
     let viewComponents = defaults(
       components[view] || {},
       omit(components, names)
     )
 
+    let ToolbarToRender = components.toolbar || Toolbar
+
     return (
-      <div {...elementProps}
+      <div
+        {...elementProps}
         className={cn('rbc-calendar', className, {
           'rbc-rtl': props.rtl
         })}
         style={style}
       >
-        { toolbar &&
-          <Toolbar
-            date={current}
-            view={view}
-            views={names}
-            label={viewLabel(current, view, formats, culture)}
-            onViewChange={this._view}
-            onNavigate={this._navigate}
-            messages={this.props.messages}
-          />
-        }
-        <View
-          ref='view'
-          {...props}
-          {...formats}
-          culture={culture}
-          formats={undefined}
-          events={events}
-          date={current}
-          components={viewComponents}
-          onNavigate={this._navigate}
-          onHeaderClick={this._headerClick}
-          onSelectEvent={this._select}
-          onSelectSlot={this._selectSlot}
-          onShowMore={this._showMore}
-        />
+        <div className='rbc-toolbar-wrapper'>
+          <div className='rbc-toolbar-container'>
+            { toolbar &&
+              <ToolbarToRender
+                date={current}
+                view={view}
+                views={names}
+                label={viewLabel(current, view, formats, culture)}
+                onViewChange={this._view}
+                onNavigate={this._navigate}
+                messages={this.props.messages}
+              />
+            }
+          </div>
+        </div>
+        <div className='rbc-view-wrapper'>
+          <div className='rbc-view-container'>
+            <View
+              ref='view'
+              {...props}
+              {...formats}
+              culture={culture}
+              formats={undefined}
+              events={events}
+              date={current}
+              components={viewComponents}
+              onNavigate={this._navigate}
+              onHeaderClick={this._headerClick}
+              onSelectEvent={this._select}
+              onSelectSlot={this._selectSlot}
+              onShowMore={this._showMore}
+            />
+          </div>
+        </div>
       </div>
     );
   },
@@ -387,16 +449,18 @@ let Calendar = React.createClass({
 
     date = moveDate(action, newDate || date, view)
 
-    onNavigate(date, view)
+    onNavigate(date, view, action)
 
-    if (action === navigate.DATE)
+    if (action === navigate.DATE) {
       this._viewNavigate(date)
+    }
   },
 
   _viewNavigate(nextDate){
     let { view, date, culture } = this.props;
+    let unit = view == 'agenda' ? 'year' : view;
 
-    if (dates.eq(date, nextDate, view, localizer.startOfWeek(culture))) {
+    if (dates.eq(date, nextDate, unit, localizer.startOfWeek(culture))) {
       this._view(views.DAY)
     }
   },
@@ -424,4 +488,8 @@ let Calendar = React.createClass({
   }
 });
 
-export default uncontrollable(Calendar, { view: 'onView', date: 'onNavigate', selected: 'onSelectEvent' })
+export default uncontrollable(Calendar, {
+  view: 'onView',
+  date: 'onNavigate',
+  // selected: 'onSelectEvent'
+})

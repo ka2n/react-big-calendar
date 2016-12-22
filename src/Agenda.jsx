@@ -1,15 +1,20 @@
 import React, { PropTypes } from 'react';
+
+import groupBy from 'lodash/collection/groupBy';
 import message from './utils/messages';
 import localizer from './localizer'
 
 import dates from './utils/dates';
+import { notify } from './utils/helpers';
 import { navigate } from './utils/constants';
 import { accessor as get } from './utils/accessors';
 
 import classes from 'dom-helpers/class';
+import cn from 'classnames';
 import getWidth from 'dom-helpers/query/width';
 import scrollbarSize from 'dom-helpers/util/scrollbarSize';
 import { inRange } from './utils/eventLevels';
+import { sortEventsByStart } from './utils/eventLevels';
 
 
 let Agenda = React.createClass({
@@ -36,21 +41,42 @@ let Agenda = React.createClass({
     this._adjustHeader()
   },
 
-  render() {
-    let { length, date, events, startAccessor } = this.props;
-    let messages = message(this.props.messages);
-    let end = dates.add(date, length, 'day')
-
-    let range = dates.range(date, end, 'day');
-
-    events = events.filter(event =>
-      inRange(event, date, end, this.props)
+  shouldComponentUpdate(nextProps, nextState) {
+    return !(
+      this.props.events == nextProps.events
     )
+  },
 
-    events.sort((a, b) => +get(a, startAccessor) - +get(b, startAccessor))
+  _scroll() {
+    this.props.onScroll && this.props.onScroll.call(null, 'agenda')
+  },
+
+  render() {
+    let { length, date, events, culture, startAccessor } = this.props;
+    let messages = message(this.props.messages);
+    // let end = dates.add(date, length, 'day')
+
+    // 表示範囲は1ヶ月間(週を考慮しない)
+    let range = dates.range(dates.startOf(date, 'month'), dates.endOf(date, 'month'))
+    date = range[0]
+    let end = range[range.length - 1]
+
+    // let range = dates.range(date, end, 'day');
+
+    // events = events.filter(event =>
+    //   inRange(event, date, end, this.props)
+    // )
+
+    // events.sort((a, b) => +get(a, startAccessor) - +get(b, startAccessor))
+    events.sort((a, b) => sortEventsByStart(a, b, this.props))
+
+    // 日毎のeventsのObjectにする
+    const dayEvents = groupBy(events, (e) => {
+      return get(e, startAccessor).toDateString()
+    })
 
     return (
-      <div className='rbc-agenda-view'>
+      <div className='rbc-agenda-view' onScroll={this._scroll}>
         <table ref='header'>
           <thead>
             <tr>
@@ -69,7 +95,7 @@ let Agenda = React.createClass({
         <div className='rbc-agenda-content' ref='content'>
           <table>
             <tbody ref='tbody'>
-              { range.map((day, idx) => this.renderDay(day, events, idx)) }
+              { range.map((day, idx) => this.renderDay(day, dayEvents, idx)) }
             </tbody>
           </table>
         </div>
@@ -85,7 +111,13 @@ let Agenda = React.createClass({
     let EventComponent = components.event;
     let DateComponent = components.date;
 
-    events = events.filter(e => inRange(e, day, day, this.props))
+    // events = events.filter(e => inRange(e, day, day, this.props))
+    events = events[day.toDateString()] || []
+    if (events.length == 0) {
+      return null
+    }
+
+    let today = dates.eq(new Date(), day, 'day')
 
     return events.map((event, idx) => {
       let dateLabel = idx === 0 && localizer.format(day, agendaDateFormat, culture)
@@ -94,7 +126,7 @@ let Agenda = React.createClass({
             <td rowSpan={events.length} className='rbc-agenda-date-cell'>
               { DateComponent
                 ? <DateComponent day={day} label={dateLabel}/>
-                : dateLabel
+                : <span role="button" onClick={this._dateClick.bind(null, day)}>{ dateLabel }</span>
               }
             </td>
           ) : false
@@ -102,7 +134,10 @@ let Agenda = React.createClass({
       let title = get(event, titleAccessor)
 
       return (
-        <tr key={dayKey + '_' + idx}>
+        <tr key={dayKey + '_' + idx} className={cn({
+        'rbc-day-headline': !!first,
+        'rbc-now': today
+        })}>
           {first}
           <td className='rbc-agenda-time-cell'>
             { this.timeRangeLabel(day, event) }
@@ -138,7 +173,7 @@ let Agenda = React.createClass({
         label = localizer.format(start, this.props.agendaTimeFormat, culture)
       }
       else if (dates.eq(day, end, 'day')){
-        label = localizer.format(start, this.props.agendaTimeFormat, culture)
+        label = localizer.format(end, this.props.agendaTimeFormat, culture)
       }
     }
 
@@ -182,24 +217,30 @@ let Agenda = React.createClass({
     else {
       classes.removeClass(header, 'rbc-header-overflowing')
     }
+  },
+
+  _dateClick(date, e){
+    e.preventDefault()
+    notify(this.props.onNavigate, [navigate.DATE, date])
   }
 });
 
 Agenda.navigate = (date, action)=>{
   switch (action){
     case navigate.PREVIOUS:
-      return dates.add(date, -1, 'day');
+      date = dates.add(date, -1, 'month');
+      break;
 
     case navigate.NEXT:
-      return dates.add(date, 1, 'day')
-
-    default:
-      return date;
+      date = dates.add(date, 1, 'month');
+      break;
   }
+  return date
 }
 
-Agenda.range = (start, { length = Agenda.defaultProps.length }) => {
-  let end = dates.add(start, length, 'day')
+Agenda.range = (date, { length = Agenda.defaultProps.length }) => {
+  let start = dates.startOf(date, 'month')
+  let end = dates.endOf(date, 'month')
   return { start, end }
 }
 

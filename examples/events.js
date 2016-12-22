@@ -29,6 +29,26 @@ export default [
     'end': new Date(2015, 3, 9, 0, 0, 0)
   },
   {
+    'title': 'Some Event',
+    'start': new Date(2015, 3, 9, 10, 0, 0),
+    'end': new Date(2015, 3, 9, 12, 0, 0)
+  },
+  {
+    'title': 'Some Event',
+    'start': new Date(2015, 3, 9, 10, 0, 0),
+    'end': new Date(2015, 3, 9, 12, 0, 0)
+  },
+  {
+    'title': 'Some Event',
+    'start': new Date(2015, 3, 9, 12, 0, 0),
+    'end': new Date(2015, 3, 9, 13, 0, 0)
+  },
+  {
+    'title': 'Some Event',
+    'start': new Date(2015, 3, 9, 14, 0, 0),
+    'end': new Date(2015, 3, 9, 16, 0, 0)
+  },
+  {
     'title': 'Conference',
     'start': new Date(2015, 3, 11),
     'end': new Date(2015, 3, 13),

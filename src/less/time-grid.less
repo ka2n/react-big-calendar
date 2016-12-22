@@ -1,6 +1,5 @@
 @import './variables.less';
-@import './gutter.less';
-@import './day-slot.less';
+@import './time-column.less';
 
 .rbc-slot-selection {
   z-index: 10;
@@ -14,12 +13,10 @@
 }
 
 .rbc-time-view {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
   width: 100%;
   border: 1px solid @calendar-border;
   min-height: 0;
+  overflow-x: scroll;
 
   .rbc-time-gutter {
     white-space: nowrap;
@@ -37,34 +34,46 @@
 
 
 .rbc-time-header {
-  display: flex;
-  flex: 0 0 auto; // should not shrink below height
-  flex-direction: column;
+  display: table;
+  width: 100%;
 
-  &.rbc-header-overflowing {
+  &.rbc-overflowing {
     border-right: 1px solid @cell-border;
   }
 
-  .rbc-rtl &.rbc-header-overflowing {
+  .rbc-rtl &.rbc-overflowing {
     border-right-width: 0;
     border-left: 1px solid @cell-border;
   }
 
-  > .rbc-row > * + * {
+  .rbc-allday-events tr:first-child > * + * {
     border-left: 1px solid @cell-border;
   }
+
+  //> .rbc-row > * + * {
+  //  border-left: 1px solid @cell-border;
+  //}
 
   .rbc-rtl & > .rbc-row > * + * {
     border-left-width: 0;
     border-right: 1px solid @cell-border;
   }
 
-  > .rbc-row:first-child {
+  > tbody > .rbc-row:first-child {
     border-bottom: 1px solid  @cell-border;
   }
 
+  //> .rbc-row:first-child {
+  //  border-bottom: 1px solid  @cell-border;
+  //}
+
   .rbc-gutter-cell {
-    flex: none;
+    display: table-cell;
+    position: relative;
+  }
+
+  .rbc-header {
+    display: table-cell;
   }
 
   > .rbc-gutter-cell + * {
@@ -73,27 +82,55 @@
 }
 
 .rbc-time-content {
-  display: flex;
-  flex: 1 1 0%;
-  align-items: flex-start;
+  display: table;
+  table-layout: auto;
   width: 100%;
   border-top: 2px solid @calendar-border;
   overflow-y: auto;
+  position: relative;
 
   > .rbc-time-gutter {
-    flex: none;
+    display: table-cell;
+    vertical-align: top;
   }
 
-  > * + * {
+  > * + * > * {
     border-left: 1px solid @cell-border;
   }
 
-  .rbc-rtl & > * + * {
+  .rbc-rtl & > * + * > * {
     border-left-width: 0;
     border-right: 1px solid @cell-border;
   }
 
   > .rbc-day-slot {
+    display: table-cell;
     width: 100%
+  }
+}
+
+.rbc-current-time-indicator {
+  position: absolute;
+  z-index: 1;
+
+  width: 100%;
+  height: 1px;
+
+  background-color: @current-time-color;
+  pointer-events: none;
+
+  &::before {
+    display: block;
+
+    position: absolute;
+    left: -3px;
+    top: -3px;
+
+    content: ' ';
+    background-color: @current-time-color;
+
+    border-radius: 50%;
+    width: 8px;
+    height: 8px;
   }
 }

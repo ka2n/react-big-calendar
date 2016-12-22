@@ -2,11 +2,12 @@
 
 
 .rbc-row {
-  display: flex;
-  flex-direction: row;
+  width: 100%;
+  line-height: 1;
 }
 
 .rbc-row-segment {
+  display: inline-block;
   padding: 0 1px 1px 1px;
 
   .rbc-event-content {
@@ -21,7 +22,6 @@
 }
 
 
-
 .rbc-show-more {
   &:extend(.rbc-ellipsis);
   background-color: rgba(255, 255, 255, 0.3);
@@ -34,14 +34,11 @@
 }
 
 .rbc-month-view {
-  position: relative;
-  border: 1px solid @calendar-border;
-  display: flex;
-  flex-direction: column;
-  flex: 1 0 0;
+  display: table;
   width: 100%;
+  height: 100%;
 
-  height: 100%; // ie-fix
+  border: 1px solid @calendar-border;
 
   .rbc-header {
     border-bottom: 1px solid @cell-border;
@@ -55,21 +52,62 @@
     border-left-width: 0;
     border-right: 1px solid @cell-border;
   }
+
+  .rbc-day-col {
+    width: 20%;
+    float: left;
+    overflow: hidden;
+  }
+}
+
+.rbc-month-header-wrapper {
+  display: table-row;
 }
 
 .rbc-month-header {
-  display: flex;
-  flex-direction: row;
+  display: table;
+  table-layout: fixed;
+}
+
+.rbc-month-header-inner {
+  display: table-row;
+
+  .rbc-header {
+    display: table-cell;
+  }
+}
+
+
+.rbc-month-wrapper {
+  display: table-row;
+  height: 100%;
+  width: 100%;
+}
+
+.rbc-month-container {
+  display: table-cell;
+  position: relative;
+  overflow-x: hidden;
+  overflow-y: scroll;
+
+  width: 100%;
+  height: 100%;
+}
+
+.rbc-month-inner {
+  position: absolute;
+  top:0;
+  left:0;
+  right:0;
+  bottom:0;
+  width: 100%;
+  height:100%;
 }
 
 .rbc-month-row {
-  display: flex;
   position: relative;
-  flex-direction: column;
-  flex: 1 0 0;
-  overflow: hidden;
 
-  height: 100%; // ie-fix
+  min-height: 17.67%;
 
   & + & {
     border-top: 1px solid @cell-border;
@@ -94,15 +132,29 @@
 
 .rbc-row-content {
   position: relative;
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 4;
+  table-layout: fixed;
+}
+
+.rbc-row-content table {
+  width: 100%;
 }
 
 .rbc-row-bg {
-  &:extend(.rbc-abs-full);
-  display: flex;
-  flex-direction: row;
-  flex: 1 0 0;
-  overflow: hidden;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  table-layout: fixed;
+}
+
+.rbc-day-bg {
+  display: inline-block;
+  height: 100%;
 }
 
 .rbc-day-bg {

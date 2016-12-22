@@ -30,7 +30,7 @@ export function eventSegments(event, first, last, { startAccessor, endAccessor }
 
 export function segStyle(span, slots){
   let per = (span / slots) * 100 + '%';
-  return { flexBasis: per, maxWidth: per } // IE10/11 need max-width. flex-basis doesn't respect box-sizing
+  return { width: per }
 }
 
 export function eventLevels(rowSegments, limit = Infinity){
@@ -76,7 +76,6 @@ export function segsOverlap(seg, otherSegs) {
     otherSeg => otherSeg.left <= seg.right && otherSeg.right >= seg.left)
 }
 
-
 export function sortEvents(evtA, evtB, { startAccessor, endAccessor, allDayAccessor }) {
   let startSort = +dates.startOf(get(evtA, startAccessor), 'day') - +dates.startOf(get(evtB, startAccessor), 'day')
 
@@ -94,4 +93,19 @@ export function sortEvents(evtA, evtB, { startAccessor, endAccessor, allDayAcces
     || Math.max(durB, 1) - Math.max(durA, 1) // events spanning multiple days go first
     || !!get(evtB, allDayAccessor) - !!get(evtA, allDayAccessor) // then allDay single day events
     || +get(evtA, startAccessor) - +get(evtB, startAccessor)     // then sort by start time
+    || ((+get(evtA, startAccessor) == +get(evtB, startAccessor)) ? sortBySectorOrMarketCap(evtA, evtB) : 0)
+}
+
+export function sortEventsByStart(evtA, evtB, { startAccessor }) {
+  const aStart = +get(evtA, startAccessor)
+  const bStart = +get(evtB, startAccessor)
+  return aStart - bStart || (aStart == bStart ? sortBySectorOrMarketCap(evtA, evtB) : 0)
+}
+
+function sortBySectorOrMarketCap(a, b) {
+  if (a.sector17_id == b.sector17_id) { // 業種が同じなら
+    return b.stock_market_cap - a.stock_market_cap; // 時価総額の降順
+  } else {
+    return a.sector17_id - b.sector17_id; // 17業種IDの昇順
+  }
 }

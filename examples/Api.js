@@ -34,7 +34,7 @@ let Api = React.createClass({
     let typeInfo = this.renderType(data);
 
     return (
-      <section>
+      <section key={name}>
         <Heading id={`prop-${name}`}>
           <a href={`#prop-${name}`}>
             <code>{name}</code>
@@ -48,10 +48,10 @@ let Api = React.createClass({
         </Heading>
         <p dangerouslySetInnerHTML={{ __html: data.descHtml }}/>
         <div style={{ paddingLeft: 0 }}>
-          <p>
+          <div>
             {'type: '}
             { typeInfo && typeInfo.type === 'pre' ? typeInfo : <code>{typeInfo}</code> }
-          </p>
+          </div>
           { data.defaultValue &&
             <div>default: <code>{data.defaultValue.trim()}</code></div>
           }

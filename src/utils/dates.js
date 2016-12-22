@@ -23,13 +23,13 @@ let dates = Object.assign(dateMath, {
   firstVisibleDay(date, culture){
     let firstOfMonth = dates.startOf(date, 'month')
 
-    return dates.startOf(firstOfMonth, 'week', localizer.startOfWeek(culture));
+    return dates.skipWeekends(dates.startOf(firstOfMonth, 'week', localizer.startOfWeek(culture)), 1);
   },
 
   lastVisibleDay(date, culture){
     let endOfMonth = dates.endOf(date, 'month')
 
-    return dates.endOf(endOfMonth, 'week', localizer.startOfWeek(culture));
+    return dates.skipWeekends(dates.endOf(endOfMonth, 'week', localizer.startOfWeek(culture)), -1);
   },
 
   visibleDays(date, culture){
@@ -40,6 +40,7 @@ let dates = Object.assign(dateMath, {
     while (dates.lte(current, last, 'day')) {
       days.push(current)
       current = dates.add(current, 1, 'day')
+      current = dates.skipWeekends(current, 1)
     }
 
     return days
@@ -166,6 +167,15 @@ let dates = Object.assign(dateMath, {
 
   tomorrow() {
     return dates.add(dates.startOf(new Date(), 'day'), 1, 'day')
+  },
+
+  skipWeekends(date, direction) {
+    var d = new Date(date);
+    var weekends = {0: true, 6: true};
+    while(weekends[dates.day(d)]) {
+      d = dates.add(d, direction, 'day')
+    }
+    return d
   }
 })
 

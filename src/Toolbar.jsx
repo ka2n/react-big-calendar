@@ -6,40 +6,42 @@ import { navigate } from './utils/constants';
 let Toolbar = React.createClass({
 
   render() {
-    let {
-        messages, label
-      , views: viewNames, view } = this.props;
+    let { messages, label } = this.props;
 
     messages = message(messages)
 
     return (
       <div className='rbc-toolbar'>
-        <span className='rbc-btn-group'>
+        <span className={cn(['rbc-btn-group', 'rbc-toolbar-left'])}>
           <button
             type='button'
             onClick={this.navigate.bind(null, navigate.TODAY)}
+            className="rbc-btn-today"
           >
             {messages.today}
           </button>
           <button
             type='button'
+            className="rbc-btn-previous"
             onClick={this.navigate.bind(null, navigate.PREVIOUS)}
           >
             {messages.previous}
           </button>
+          <span
+            className={cn(['rbc-toolbar-label', 'rbc-toolbar-title'])}
+          >
+            { label }
+          </span>
           <button
             type='button'
             onClick={this.navigate.bind(null, navigate.NEXT)}
+            className="rbc-btn-next"
           >
             {messages.next}
           </button>
         </span>
 
-        <span className='rbc-toolbar-label'>
-          { label }
-        </span>
-
-        <span className='rbc-btn-group'>
+        <span className={cn(['rbc-btn-group', 'rbc-toolbar-right'])}>
           {
             this.viewNamesGroup(messages)
           }
@@ -57,7 +59,6 @@ let Toolbar = React.createClass({
   },
 
   viewNamesGroup(messages) {
-    let component = null
     let viewNames = this.props.views
     const view = this.props.view
 

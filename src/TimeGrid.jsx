@@ -1,15 +1,14 @@
-import React from 'react';
+import React, { Component } from 'react';
 import cn from 'classnames';
 import { findDOMNode } from 'react-dom';
 import dates from './utils/dates';
 import localizer from './localizer'
 
-import DaySlot from './DaySlot';
+import DayColumn from './DayColumn';
 import EventRow from './EventRow';
-import TimeGutter from './TimeGutter';
+import TimeColumn from './TimeColumn';
 import BackgroundCells from './BackgroundCells';
 
-import classes from 'dom-helpers/class';
 import getWidth from 'dom-helpers/query/width';
 import scrollbarSize from 'dom-helpers/util/scrollbarSize';
 import message from './utils/messages';
@@ -21,51 +20,93 @@ import { navigate } from './utils/constants';
 import { accessor as get } from './utils/accessors';
 
 import {
-    inRange, eventSegments, endOfRange
+  inRange, eventSegments, endOfRange
   , eventLevels, sortEvents, segStyle } from './utils/eventLevels';
 
 const MIN_ROWS = 2;
 
 
-let TimeGrid = React.createClass({
+export default class TimeGrid extends Component {
 
-  propTypes: {
-    ...DaySlot.propTypes,
-    ...TimeGutter.propTypes,
+  static propTypes = {
+    ...DayColumn.propTypes,
+    ...TimeColumn.propTypes,
 
     step: React.PropTypes.number,
     min: React.PropTypes.instanceOf(Date),
     max: React.PropTypes.instanceOf(Date),
+    scrollToTime: React.PropTypes.instanceOf(Date),
     dayFormat: dateFormat,
     rtl: React.PropTypes.bool
-  },
+  }
 
-  getDefaultProps(){
-    return {
-      step: 30,
-      min: dates.startOf(new Date(), 'day'),
-      max: dates.endOf(new Date(), 'day')
-    }
-  },
+  static defaultProps = {
+    ...DayColumn.defaultProps,
+    ...TimeColumn.defaultProps,
+
+    step: 30,
+    min: dates.startOf(new Date(), 'day'),
+    max: dates.endOf(new Date(), 'day'),
+    scrollToTime: dates.startOf(new Date(), 'day'),
+    /* these 2 are needed to satisfy requirements from TimeColumn required props
+     * There is a strange bug in React, using ...TimeColumn.defaultProps causes weird crashes
+     */
+    type: 'gutter',
+    now: new Date()
+  }
+
+  constructor(props) {
+    super(props)
+    this.state = { gutterWidth: undefined, isOverflowing: null };
+    this._selectEvent = this._selectEvent.bind(this)
+    this._headerClick = this._headerClick.bind(this)
+  }
 
   componentWillMount() {
     this._gutters = [];
-  },
+    this.calculateScroll();
+  }
 
   componentDidMount() {
-    this._adjustGutter()
-  },
+    this.checkOverflow();
+
+    if (this.props.width == null) {
+      this.measureGutter()
+    }
+    this.applyScroll();
+
+    this.positionTimeIndicator();
+    this.triggerTimeIndicatorUpdate();
+  }
+
+  componentWillUnmount() {
+    window.clearTimeout(this._timeIndicatorTimeout);
+  }
 
   componentDidUpdate() {
-    this._adjustGutter()
-  },
+    if (this.props.width == null && !this.state.gutterWidth) {
+      this.measureGutter()
+    }
+
+    this.applyScroll();
+    this.positionTimeIndicator();
+    //this.checkOverflow()
+  }
+
+  componentWillReceiveProps(nextProps) {
+    const { start, scrollToTime } = this.props;
+    // When paginating, reset scroll
+    if (!dates.eq(nextProps.start, start) || nextProps.scrollToTime !== scrollToTime) {
+      this.calculateScroll();
+    }
+  }
 
   render() {
     let {
-        events, start, end, messages
+        events, start, end, width
       , startAccessor, endAccessor, allDayAccessor } = this.props;
 
-    let addGutterRef = i => ref => this._gutters[i] = ref;
+    width = width || this.state.gutterWidth;
 
     let range = dates.range(start, end, 'day')
 
@@ -80,7 +121,7 @@ let TimeGrid = React.createClass({
           , eEnd = get(event, endAccessor);
 
         if (
-             get(event, allDayAccessor)
+          get(event, allDayAccessor)
           || !dates.eq(eStart, eEnd, 'day')
           || (dates.isJustDate(eStart) && dates.isJustDate(eEnd)))
         {
@@ -93,45 +134,36 @@ let TimeGrid = React.createClass({
 
     allDayEvents.sort((a, b) => sortEvents(a, b, this.props))
 
-    let segments = allDayEvents.map(evt => eventSegments(evt, start, end, this.props))
-    let { levels } = eventLevels(segments)
+    let {first, last} = endOfRange(range);
+
+    let segments = allDayEvents.map(evt => eventSegments(evt, first, last, this.props))
+
+    let gutterRef = ref => this._gutters[1] = ref && findDOMNode(ref);
 
     return (
       <div className='rbc-time-view'>
-        <div ref='headerCell' className='rbc-time-header'>
-          <div className='rbc-row'>
-            <div ref={addGutterRef(0)} className='rbc-gutter-cell'/>
-            { this.renderHeader(range) }
-          </div>
-          <div className='rbc-row'>
-            <div ref={addGutterRef(1)} className='rbc-gutter-cell'>
-              { message(messages).allDay }
-            </div>
-            <div ref='allDay' className='rbc-allday-cell'>
-              <BackgroundCells
-                slots={range.length}
-                container={()=> this.refs.allDay}
-                selectable={this.props.selectable}
-              />
-              <div style={{ zIndex: 1, position: 'relative' }}>
-                { this.renderAllDayEvents(range, levels) }
-              </div>
-            </div>
-          </div>
-        </div>
+        {
+          this.renderHeader(range, segments, width)
+        }
         <div ref='content' className='rbc-time-content'>
-          <TimeGutter ref='gutter' {...this.props}/>
+          <div ref='timeIndicator' className='rbc-current-time-indicator'></div>
+          <TimeColumn
+            {...this.props}
+            showLabels
+            style={{ width, minWidth: width, maxWidth: width }}
+            ref={gutterRef}
+            className='rbc-time-gutter'
+          />
           {
-            this.renderEvents(range, rangeEvents)
+            this.renderEvents(range, rangeEvents, this.props.now)
           }
         </div>
       </div>
     );
-  },
+  }
 
-  renderEvents(range, events){
+  renderEvents(range, events, today){
     let { min, max, endAccessor, startAccessor, components } = this.props;
-    let today = new Date();
 
     return range.map((date, idx) => {
       let daysEvents = events.filter(
@@ -141,7 +173,7 @@ let TimeGrid = React.createClass({
       )
 
       return (
-        <DaySlot
+        <DayColumn
           {...this.props }
           min={dates.merge(date, min)}
           max={dates.merge(date, max)}
@@ -154,7 +186,7 @@ let TimeGrid = React.createClass({
         />
       )
     })
-  },
+  }
 
   renderAllDayEvents(range, levels){
     let { first, last } = endOfRange(range);
@@ -178,59 +210,160 @@ let TimeGrid = React.createClass({
         end={last}
       />
     )
-  },
+  }
 
-  renderHeader(range){
+  renderHeader(range, segments, width) {
+    let { messages, rtl } = this.props;
+    let { isOverflowing } = this.state || {};
+
+    let { levels } = eventLevels(segments);
+    let style = {};
+
+    if (isOverflowing)
+      style[rtl ? 'marginLeft' : 'marginRight'] = scrollbarSize() + 'px';
+
+    return (
+      <table
+        ref='headerCell'
+        className={cn(
+          'rbc-time-header',
+          isOverflowing && 'rbc-overflowing'
+        )}
+        style={style}
+      >
+        <tbody>
+        <tr className='rbc-row'>
+          <td
+            className='rbc-label rbc-header-gutter'
+            style={{ width, minWidth: width, maxWidth: width }}
+          />
+          { this.renderHeaderCells(range) }
+        </tr>
+        <tr className='rbc-row'>
+          <td className="rbc-allday-events" colSpan={range.length + 1}>
+            <table style={{ width: '100%'}}>
+              <tbody><tr><td
+                ref={ref => this._gutters[0] = ref}
+                className='rbc-label rbc-header-gutter'
+                style={{ width, minWidth: width, maxWidth: width }}
+              >
+                { message(messages).allDay }
+              </td>
+                <td ref='allDay' className='rbc-allday-cell'>
+                  <BackgroundCells
+                    slots={range.length}
+                    container={()=> this.refs.allDay}
+                    selectable={this.props.selectable}
+                  />
+                  <div style={{ zIndex: 1, position: 'relative' }}>
+                    { this.renderAllDayEvents(range, levels) }
+                  </div>
+                </td></tr></tbody>
+            </table>
+          </td>
+        </tr>
+        </tbody>
+      </table>
+    )
+  }
+
+  renderHeaderCells(range){
     let { dayFormat, culture } = this.props;
 
     return range.map((date, i) =>
-      <div key={i}
+      <td key={i}
         className='rbc-header'
-        style={segStyle(1, this._slots)}
       >
         <a href='#' onClick={this._headerClick.bind(null, date)}>
           { localizer.format(date, dayFormat, culture) }
         </a>
-      </div>
+      </td>
     )
-  },
+  }
 
   _headerClick(date, e){
     e.preventDefault()
     notify(this.props.onNavigate, [navigate.DATE, date])
-  },
+  }
 
   _selectEvent(...args){
     notify(this.props.onSelectEvent, args)
-  },
+  }
 
-  _adjustGutter() {
-    let isRtl = this.props.rtl;
-    let header = this.refs.headerCell;
-    let width = this._gutterWidth
-    let gutterCells = [findDOMNode(this.refs.gutter), ...this._gutters]
-    let isOverflowing = this.refs.content.scrollHeight > this.refs.content.clientHeight;
+  measureGutter() {
+    let width = this.state.gutterWidth;
+    let gutterCells = this._gutters;
 
     if (!width) {
-      this._gutterWidth = Math.max(...gutterCells.map(getWidth));
+      width = Math.max(...gutterCells.map(getWidth));
 
-      if (this._gutterWidth) {
-        width = this._gutterWidth + 'px';
-        gutterCells.forEach(node => node.style.width = width)
+      if (width) {
+        this.setState({ gutterWidth: width })
       }
-    }
-
-    if (isOverflowing) {
-      classes.addClass(header, 'rbc-header-overflowing')
-      this.refs.headerCell.style[!isRtl ? 'marginLeft' : 'marginRight'] = '';
-      this.refs.headerCell.style[isRtl ? 'marginLeft' : 'marginRight'] = scrollbarSize() + 'px';
-    }
-    else {
-      classes.removeClass(header, 'rbc-header-overflowing')
     }
   }
 
-});
+  applyScroll() {
+    if (this._scrollRatio) {
+      const { content } = this.refs;
+      content.scrollTop = content.scrollHeight * this._scrollRatio;
+      // Only do this once
+      this._scrollRatio = null;
+    }
+  }
 
+  calculateScroll() {
+    const { min, max, scrollToTime } = this.props;
 
-export default TimeGrid
+    const diffMillis = scrollToTime - dates.startOf(scrollToTime, 'day');
+    const totalMillis = dates.diff(max, min);
+
+    this._scrollRatio = diffMillis / totalMillis;
+  }
+
+  checkOverflow() {
+    if (this._updatingOverflow) return;
+
+    let isOverflowing = this.refs.content.scrollHeight > this.refs.content.clientHeight;
+
+    if (this.state.isOverflowing !== isOverflowing) {
+      this._updatingOverflow = true;
+      this.setState({ isOverflowing }, () => {
+        this._updatingOverflow = false;
+      })
+    }
+  }
+
+  positionTimeIndicator() {
+    const {min, max} = this.props
+    const now = new Date();
+
+    const secondsGrid = dates.diff(max, min, 'seconds');
+    const secondsPassed = dates.diff(now, min, 'seconds');
+
+    const timeIndicator = this.refs.timeIndicator;
+    const factor = secondsPassed / secondsGrid;
+    const timeGutter = this._gutters[this._gutters.length - 1];
+
+    if (timeGutter && now >= min && now <= max) {
+      const pixelHeight = timeGutter.offsetHeight;
+      const offset = Math.floor(factor * pixelHeight);
+
+      timeIndicator.style.display = 'block';
+      timeIndicator.style.left = timeGutter.offsetWidth + 'px';
+      timeIndicator.style.top = offset + 'px';
+    } else {
+      timeIndicator.style.display = 'none';
+    }
+  }
+
+  triggerTimeIndicatorUpdate() {
+    // Update the position of the time indicator every minute
+    this._timeIndicatorTimeout = window.setTimeout(() => {
+      this.positionTimeIndicator();
+
+      this.triggerTimeIndicatorUpdate();
+    }, 60000)
+  }
+
+}

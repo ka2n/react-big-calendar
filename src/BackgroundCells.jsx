@@ -5,11 +5,13 @@ import { segStyle } from './utils/eventLevels';
 import { notify } from './utils/helpers';
 import { dateCellSelection, slotWidth, getCellAtX, pointInBox } from './utils/selection';
 import Selection, { getBoundsForNode } from './Selection';
+import shallowCompare from 'react-addons-shallow-compare'
 
 class DisplayCells extends React.Component {
 
   static propTypes = {
     selectable: React.PropTypes.bool,
+    todayIndex: React.PropTypes.number,
     onSelect: React.PropTypes.func,
     slots: React.PropTypes.number
   }
@@ -32,26 +34,35 @@ class DisplayCells extends React.Component {
       this._teardownSelectable();
   }
 
+  shouldComponentUpdate(nextProps, nextState) {
+    return shallowCompare(this, nextProps, nextState)
+  }
+
   render(){
-    let { slots } = this.props;
+    let { slots, todayIndex } = this.props;
     let { selecting, startIdx, endIdx } = this.state
 
     let children = [];
+
+    let style = {
+      width: `${100 / slots }%`
+    }
 
     for (var i = 0; i < slots; i++) {
       children.push(
         <div
           key={'bg_' + i}
-          style={segStyle(1, slots)}
+          style={style}
           className={cn('rbc-day-bg', {
-            'rbc-selected-cell': selecting && i >= startIdx && i <= endIdx
+            'rbc-selected-cell': selecting && i >= startIdx && i <= endIdx,
+            'rbc-now': i == todayIndex
           })}
-        />
+        >&nbsp;</div>
       )
     }
 
     return (
-      <div className='rbc-row-bg'>
+      <div className='rbc-row-bg' cellSpacing='0' cellPadding='0'>
         { children }
       </div>
     )
